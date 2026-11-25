@@ -1,0 +1,79 @@
+name: OCI A1 retry
+
+on:
+  schedule:
+    - cron: "7 * * * *" # toutes les heures, chaque run tente pendant ~50 min
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: oci-a1
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer l'OCI CLI
+        run: pipx install oci-cli
+
+      - name: Configurer l'acces OCI
+        env:
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: |
+          mkdir -p ~/.oci
+          printf '%s\n' "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+          printf '%s\n' "$SSH_PUBLIC_KEY" > ~/.oci/vm_key.pub
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=$OCI_USER_OCID
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY_OCID
+          region=$OCI_REGION
+          key_file=$HOME/.oci/oci_api_key.pem
+          EOF
+          chmod 600 ~/.oci/config ~/.oci/oci_api_key.pem
+          oci iam region list --query "data[0].name" --raw-output > /dev/null
+          echo "Connexion OCI OK"
+
+      - name: Tenter la creation de la VM
+        id: try
+        env:
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_TENANCY_OCID }}
+          SSH_KEY_FILE: /home/runner/.oci/vm_key.pub
+          VM_OCPUS: "4"
+          VM_MEMORY_GB: "24"
+        run: bash scripts/create-a1.sh
+
+      - name: Prevenir par mail et arreter le workflow
+        if: steps.try.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IP: ${{ steps.try.outputs.public_ip }}
+          ID: ${{ steps.try.outputs.instance_id }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "VM A1 creee : $IP" \
+            --body "@$OWNER ta VM Oracle est prete.
+
+          - IP publique : \`$IP\`
+          - OCID : \`$ID\`
+
+          Connexion depuis PowerShell :
+          \`\`\`
+          ssh -i \"\$env:USERPROFILE\\.ssh\\oci-vm-a1.key\" ubuntu@$IP
+          \`\`\`"
+          gh workflow disable "${{ github.workflow }}" --repo "$GITHUB_REPOSITORY"
