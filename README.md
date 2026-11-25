@@ -4,7 +4,7 @@ Workflow GitHub Actions qui crée automatiquement une VM **Always Free Ampere A1
 
 ## Fonctionnement
 
-- Toutes les heures, un run tente la création pendant environ 50 min (un essai par minute).
+- Toutes les heures, un run tente la création pendant environ 40 min (un essai par minute).
 - Au premier passage, le script crée le réseau : VCN `vcn-a1`, Internet Gateway, route par défaut et sous-réseau public `subnet-a1`.
 - Dès que la VM `vm-ubuntu-a1` est créée, le workflow ouvre une issue avec l'IP publique (notification par mail) puis se désactive.
 - Si la VM existe déjà, le run s'arrête sans rien faire.
