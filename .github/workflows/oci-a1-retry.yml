@@ -2,7 +2,7 @@ name: OCI A1 retry
 
 on:
   schedule:
-    - cron: "7 * * * *" # toutes les heures, chaque run tente pendant ~50 min
+    - cron: "7 * * * *" # toutes les heures, chaque run tente pendant ~40 min
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
           mkdir -p ~/.oci
-          printf '%s\n' "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+          printf '%s\nOCI_API_KEY\n' "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
           printf '%s\n' "$SSH_PUBLIC_KEY" > ~/.oci/vm_key.pub
           cat > ~/.oci/config <<EOF
           [DEFAULT]
