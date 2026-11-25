@@ -9,7 +9,7 @@ OCPUS="${VM_OCPUS:-4}"
 MEM="${VM_MEMORY_GB:-24}"
 BOOT_GB="${VM_BOOT_GB:-100}"
 SSH_KEY_FILE="${SSH_KEY_FILE:?SSH_KEY_FILE manquant}"
-RUN_MINUTES="${RUN_MINUTES:-50}"
+RUN_MINUTES="${RUN_MINUTES:-40}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-60}"
 
 out_file="${GITHUB_OUTPUT:-/dev/null}"
@@ -83,7 +83,7 @@ while (( $(date +%s) < deadline )); do
     --image-id "$image" --subnet-id "$subnet" --assign-public-ip true \
     --boot-volume-size-in-gbs "$BOOT_GB" \
     --ssh-authorized-keys-file "$SSH_KEY_FILE" \
-    --wait-for-state RUNNING --max-wait-seconds 900 \
+    --no-retry --wait-for-state RUNNING --max-wait-seconds 600 \
     --query data.id --raw-output 2>&1)
   rc=$?
   set -e
@@ -101,10 +101,13 @@ while (( $(date +%s) < deadline )); do
     exit 0
   fi
 
+  code=$(grep -o '"code": "[^"]*"' <<< "$res" | head -n1 | cut -d'"' -f4 || true)
+  log "Reponse OCI : ${code:-inconnue}"
+
   if grep -qi "capacity" <<< "$res"; then
     log "Pas de capacite, nouvel essai dans ${SLEEP_SECONDS}s"
     sleep "$SLEEP_SECONDS"
-  elif grep -qiE "TooManyRequests|429" <<< "$res"; then
+  elif grep -q "TooManyRequests" <<< "$res"; then
     log "Trop de requetes, pause de 3 min"
     sleep 180
   else
